@@ -11,22 +11,17 @@ const $  = (q, p = document) => p.querySelector(q);
 const $$ = (q, p = document) => [...p.querySelectorAll(q)];
 const busy = on => ($('#spinner').style.display = on ? 'flex' : 'none');
 
-/* === simple wrapper around fetch() ==================================== */
-async function api (action, params = {}, body = null) {
-  const url = new URL(API_BASE);
-  url.searchParams.set('action', action);
-  for (const [k, v] of Object.entries(params)) url.searchParams.set(k, v);
-
-  const opts = body
-    ? { method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(body) }
-    : { method: 'GET' };
-
-  const res  = await fetch(url, opts);
-  const json = await res.json();
-  if (!json.success) throw new Error(json.error || 'Błąd API');
-  return json.data;
+/* === JSONP wrapper for API calls ====================================== */
+function apiCall(params, cbName, cb) {
+  const query = new URLSearchParams({ ...params, callback: cbName });
+  const script = document.createElement('script');
+  script.src = `${API_BASE}?${query}`;
+  window[cbName] = function(data) {
+    cb(data);
+    delete window[cbName];
+    document.head.removeChild(script);
+  };
+  document.head.appendChild(script);
 }
 
 /* === global state ===================================================== */
@@ -36,7 +31,7 @@ let curYear = '';     // wybrany rok w zakładce 2
 /* =======================================================================
    1. LOGOWANIE
    ===================================================================== */
-$('#btn-login').addEventListener('click', async () => {
+$('#btn-login').addEventListener('click', () => {
   const email = $('#login-email').value.trim().toLowerCase();
   const pass  = $('#login-pass').value.trim();
 
@@ -45,13 +40,20 @@ $('#btn-login').addEventListener('click', async () => {
     return;
   }
   $('#login-error').textContent = '';
-  try {
-    busy(true);
-    me = await api('loginUser', { email, pass });
-    enterPanel();
-  } catch (e) {
-    $('#login-error').textContent = e.message;
-  } finally { busy(false); }
+  busy(true);
+  apiCall(
+    { action: 'login', email, password: pass },
+    'onLoginResponse',
+    function(data) {
+      busy(false);
+      if (data.error) {
+        $('#login-error').textContent = data.error;
+        return;
+      }
+      me = data;
+      enterPanel();
+    }
+  );
 });
 
 /* =======================================================================
@@ -68,44 +70,50 @@ function enterPanel () {
 
 /* ----------  profil (zakładka 1)  ---------- */
 function fillProfileCard () {
-  $('#prof-name').textContent    = `${me.firstName} ${me.lastName}`;
-  $('#prof-spec-no').textContent = me.specNumber ? `Numer ID: ${me.specNumber}` : '';
-  $('#prof-level').textContent   = me.level ? `Poziom: ${me.level}` : '';
-  $('#prof-specializations').textContent = me.specs || '';
-  $('#avatar-img').src           = me.avatar || 'https://via.placeholder.com/120';
+  $('#prof-name').textContent    = `${me['Imię']} ${me['Nazwisko']}`;
+  $('#prof-spec-no').textContent = me['Numer specjalisty'] ? `Numer ID: ${me['Numer specjalisty']}` : '';
+  $('#prof-level').textContent   = me['Poziom specjalisty'] ? `Poziom: ${me['Poziom specjalisty']}` : '';
+  $('#prof-specializations').textContent = me['Posiadane specjalizacje'] || '';
+  $('#avatar-img').src           = me['Zdjęcie (URL)'] || 'https://via.placeholder.com/120';
 
-  $('#f-phone-private').value    = me.phonePrivate  || '';
-  $('#f-phone-reg').value        = me.phoneReg      || '';
-  $('#f-email-login').value      = me.email         || '';
-  $('#f-email-public').value     = me.emailPublic   || '';
-  $('#f-city').value             = me.city          || '';
-  $('#f-zip').value              = me.zip           || '';
-  $('#f-street').value           = me.street        || '';
-  $('#f-bio').value              = me.bio           || '';
+  $('#f-phone-private').value    = me['Telefon prywatny']  || '';
+  $('#f-phone-reg').value        = me['Telefon (Kontakt)'] || '';
+  $('#f-email-login').value      = me['Email']             || '';
+  $('#f-email-public').value     = me['Email Publiczny']   || '';
+  $('#f-city').value             = me['Miejscowość']       || '';
+  $('#f-zip').value              = me['Kod pocztowy']      || '';
+  $('#f-street').value           = me['Ulica']             || '';
+  $('#f-bio').value              = me['Opis specjalisty']  || '';
   M.updateTextFields();
 }
 
 /*  ---- zapisz profil ---- */
-$('#btn-save-profile').addEventListener('click', async e => {
+$('#btn-save-profile').addEventListener('click', e => {
   e.preventDefault();
   const upd = {
-    phonePrivate : $('#f-phone-private').value.trim(),
-    phoneReg     : $('#f-phone-reg').value.trim(),
-    email        : $('#f-email-login').value.trim().toLowerCase(),
-    emailPublic  : $('#f-email-public').value.trim(),
-    city         : $('#f-city').value.trim(),
-    zip          : $('#f-zip').value.trim(),
-    street       : $('#f-street').value.trim(),
-    bio          : $('#f-bio').value.trim()
+    'Telefon prywatny' : $('#f-phone-private').value.trim(),
+    'Telefon (Kontakt)' : $('#f-phone-reg').value.trim(),
+    'Email' : $('#f-email-login').value.trim().toLowerCase(),
+    'Email Publiczny' : $('#f-email-public').value.trim(),
+    'Miejscowość' : $('#f-city').value.trim(),
+    'Kod pocztowy' : $('#f-zip').value.trim(),
+    'Ulica' : $('#f-street').value.trim(),
+    'Opis specjalisty' : $('#f-bio').value.trim()
   };
-  try {
-    busy(true);
-    const msg = await api('saveProfile', {}, upd);
-    $('#profile-msg').textContent = msg;
-    Object.assign(me, upd);
-  } catch (e) {
-    $('#profile-msg').textContent = e.message;
-  } finally { busy(false); }
+  busy(true);
+  apiCall(
+    { action: 'profileUpd', email: me['Email'], data: JSON.stringify(upd) },
+    'onProfileUpdateResponse',
+    function(data) {
+      busy(false);
+      if (data.error) {
+        $('#profile-msg').textContent = data.error;
+        return;
+      }
+      $('#profile-msg').textContent = 'Profil zaktualizowany';
+      Object.assign(me, upd);
+    }
+  );
 });
 
 /*  ---- upload avatar ---- */
@@ -113,50 +121,66 @@ $('#avatar-file').addEventListener('change', e => {
   const file = e.target.files[0];
   if (!file) return;
   const reader = new FileReader();
-  reader.onload = async ev => {
-    try {
-      busy(true);
-      const url = await api(
-        'uploadAvatar',
-        { fileName: file.name },
-        { base64: ev.target.result.split(',')[1] }
-      );
-      me.avatar = url;
-      $('#avatar-img').src = url;
-      $('#profile-msg').textContent = 'Avatar zaktualizowany';
-    } catch (err) {
-      $('#profile-msg').textContent = err.message;
-    } finally { busy(false); }
+  reader.onload = ev => {
+    busy(true);
+    apiCall(
+      { action: 'avatar', email: me['Email'], base64: ev.target.result },
+      'onAvatarUploadResponse',
+      function(data) {
+        busy(false);
+        if (data.error) {
+          $('#profile-msg').textContent = data.error;
+          return;
+        }
+        me['Zdjęcie (URL)'] = data;
+        $('#avatar-img').src = data;
+        $('#profile-msg').textContent = 'Avatar zaktualizowany';
+      }
+    );
   };
   reader.readAsDataURL(file);
 });
 
 /*  ---- usuń avatar ---- */
-$('#btn-delete-avatar').addEventListener('click', async () => {
+$('#btn-delete-avatar').addEventListener('click', () => {
   if (!confirm('Usunąć avatar?')) return;
-  try {
-    busy(true);
-    await api('deleteAvatar');
-    me.avatar = '';
-    $('#avatar-img').src = 'https://via.placeholder.com/120';
-    $('#profile-msg').textContent = 'Usunięto avatar';
-  } catch (e) {
-    $('#profile-msg').textContent = e.message;
-  } finally { busy(false); }
+  busy(true);
+  apiCall(
+    { action: 'deleteAvatar', email: me['Email'] },
+    'onDeleteAvatarResponse',
+    function(data) {
+      busy(false);
+      if (data.error) {
+        $('#profile-msg').textContent = data.error;
+        return;
+      }
+      me['Zdjęcie (URL)'] = '';
+      $('#avatar-img').src = 'https://via.placeholder.com/120';
+      $('#profile-msg').textContent = 'Usunięto avatar';
+    }
+  );
 });
 
 /* =======================================================================
    3. Lata / podsumowanie / wpisy  (zakładka 2)
    ===================================================================== */
-async function listYears () {
-  try {
-    const years = await api('getYears');
-    const sel = $('#sel-year');
-    sel.innerHTML = '<option value="" disabled selected>– Wybierz rok –</option>';
-    years.forEach(y => sel.insertAdjacentHTML('beforeend',
-      `<option value="${y}">${y}</option>`));
-    M.FormSelect.init(sel);
-  } catch (e) { console.error(e); }
+function listYears () {
+  apiCall(
+    { action: 'getYears' },
+    'onYearsResponse',
+    function(data) {
+      if (data.error) {
+        console.error(data.error);
+        return;
+      }
+      const years = data;
+      const sel = $('#sel-year');
+      sel.innerHTML = '<option value="" disabled selected>– Wybierz rok –</option>';
+      years.forEach(y => sel.insertAdjacentHTML('beforeend',
+        `<option value="${y}">${y}</option>`));
+      M.FormSelect.init(sel);
+    }
+  );
 }
 
 $('#sel-year').addEventListener('change', e => {
@@ -166,66 +190,87 @@ $('#sel-year').addEventListener('change', e => {
 });
 
 /* ---- podsumowanie roku ---- */
-async function loadAnnualSummary () {
+function loadAnnualSummary () {
   if (!curYear) return;
-  try {
-    busy(true);
-    const sum = await api('getAnnualSummary', { year: curYear });
-    $('#sum-crza').textContent   = sum.crza   || 0;
-    $('#sum-crzb').textContent   = sum.crzb   || 0;
-    $('#sum-sup').textContent    = sum.sup    || 0;
-    $('#sum-fee').textContent    = sum.fee    || '–';
-    $('#sum-pp').textContent     = sum.pp     || '–';
-    $('#sum-cr').textContent     = sum.cr     || '–';
-    $('#sum-active').textContent = sum.active ? 'TAK' : 'NIE';
-  } catch (e) { console.error(e); }
-  finally { busy(false); }
+  busy(true);
+  apiCall(
+    { action: 'annual', year: curYear, email: me['Email'] },
+    'onAnnualSummaryResponse',
+    function(data) {
+      busy(false);
+      if (data.error) {
+        console.error(data.error);
+        return;
+      }
+      $('#sum-crza').textContent   = data['CRZ-A'] || 0;
+      $('#sum-crzb').textContent   = data['CRZ-B'] || 0;
+      $('#sum-sup').textContent    = data['Superwizje'] || 0;
+      $('#sum-fee').textContent    = data['Opłata za Rok'] || '–';
+      $('#sum-pp').textContent     = data['CertPP'] || '–';
+      $('#sum-cr').textContent     = data['Niekaralny'] || '–';
+      $('#sum-active').textContent = data.active ? 'TAK' : 'NIE';
+    }
+  );
 }
 
 /* ---- lista wpisów ---- */
-async function loadEntries () {
+function loadEntries () {
   if (!curYear) return;
-  try {
-    busy(true);
-    const entries = await api('getEntries', { year: curYear });
-    const ul = $('#entry-list'); ul.innerHTML = '';
-    if (!entries.length) {
-      ul.innerHTML = '<li class="collection-item grey-text">Brak wpisów</li>';
-    } else {
-      entries.forEach(en => {
-        ul.insertAdjacentHTML('beforeend', `
-          <li class="collection-item" data-id="${en.id}">
-            <span>${en.type} — ${en.title}</span>
-            <span class="secondary-content">
-              ${en.points ?? en.hours}
-              <a href="${en.file}" target="_blank"><i class="fas fa-file-pdf"></i></a>
-              <a href="#!" class="del-entry"><i class="fas fa-trash red-text"></i></a>
-            </span>
-          </li>`);
-      });
+  busy(true);
+  apiCall(
+    { action: 'getEntries', year: curYear, email: me['Email'] },
+    'onEntriesResponse',
+    function(data) {
+      busy(false);
+      if (data.error) {
+        console.error(data.error);
+        return;
+      }
+      const entries = data;
+      const ul = $('#entry-list'); ul.innerHTML = '';
+      if (!entries.length) {
+        ul.innerHTML = '<li class="collection-item grey-text">Brak wpisów</li>';
+      } else {
+        entries.forEach(en => {
+          ul.insertAdjacentHTML('beforeend', `
+            <li class="collection-item" data-id="${en.id}">
+              <span>${en.type} — ${en.title}</span>
+              <span class="secondary-content">
+                ${en.points ?? en.hours}
+                <a href="${en.file}" target="_blank"><i class="fas fa-file-pdf"></i></a>
+                <a href="#!" class="del-entry"><i class="fas fa-trash red-text"></i></a>
+              </span>
+            </li>`);
+        });
+      }
     }
-  } catch (e) { console.error(e); }
-  finally { busy(false); }
+  );
 }
 
 /* ---- kasowanie wpisu ---- */
-$('#entry-list').addEventListener('click', async e => {
+$('#entry-list').addEventListener('click', e => {
   if (!e.target.closest('.del-entry')) return;
   const li = e.target.closest('li');
   const id = li.dataset.id;
   if (!confirm('Usunąć ten wpis?')) return;
-  try {
-    busy(true);
-    await api('deleteEntry', { year: curYear, id });
-    li.remove();
-    loadAnnualSummary();
-  } catch (err) {
-    alert(err.message);
-  } finally { busy(false); }
+  busy(true);
+  apiCall(
+    { action: 'deleteEntry', year: curYear, id, email: me['Email'] },
+    'onDeleteEntryResponse',
+    function(data) {
+      busy(false);
+      if (data.error) {
+        alert(data.error);
+        return;
+      }
+      li.remove();
+      loadAnnualSummary();
+    }
+  );
 });
 
 /* ---- dodawanie wpisów ---- */
-async function addEntry (type) {
+function addEntry (type) {
   if (!curYear) return M.toast({ text: 'Wybierz rok', classes: 'red' });
 
   const title = prompt(`Opis ${type}:`);
@@ -236,27 +281,34 @@ async function addEntry (type) {
   const fileInput = document.createElement('input');
   fileInput.type = 'file';
   fileInput.accept = 'application/pdf';
-  fileInput.onchange = async () => {
+  fileInput.onchange = () => {
     const file = fileInput.files[0];
     if (!file) return;
     const reader = new FileReader();
-    reader.onload = async ev => {
-      try {
-        busy(true);
-        await api(
-          'addEntry',
-          { year: curYear },
-          {
-            type, title, hours,
-            base64: ev.target.result.split(',')[1],
-            fileName: file.name
+    reader.onload = ev => {
+      busy(true);
+      apiCall(
+        {
+          action: 'addEntry',
+          year: curYear,
+          email: me['Email'],
+          kind: type,
+          hours,
+          desc: title,
+          base64: ev.target.result,
+          fileName: file.name
+        },
+        'onAddEntryResponse',
+        function(data) {
+          busy(false);
+          if (data.error) {
+            alert(data.error);
+            return;
           }
-        );
-        loadAnnualSummary();
-        loadEntries();
-      } catch (err) {
-        alert(err.message);
-      } finally { busy(false); }
+          loadAnnualSummary();
+          loadEntries();
+        }
+      );
     };
     reader.readAsDataURL(file);
   };
@@ -265,7 +317,7 @@ async function addEntry (type) {
 
 $('#btn-add-crza').onclick = () => addEntry('CRZ-A');
 $('#btn-add-crzb').onclick = () => addEntry('CRZ-B');
-$('#btn-add-sup').onclick  = () => addEntry('SUP');
+$('#btn-add-sup').onclick  = () => addEntry('Superwizje');
 
 /* =======================================================================
    4. INIT – Materialize zakładki
