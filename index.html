@@ -5,7 +5,10 @@
   <meta name="viewport" content="width=device-width,initial-scale=1">
   <title>Panel Członka – TDP</title>
 
-  <!-- tutaj w przyszłości Twój arkusz stylów -->
+  <!-- Manifest -->
+  <link rel="manifest" href="manifest.json">
+
+  <!-- Tutaj w przyszłości Twój arkusz stylów -->
   <link rel="stylesheet" href="main.css">
 
   <!-- Materialize (ICONS optional – można wyciąć) -->
@@ -76,7 +79,7 @@
     <div class="row">
       <!-- kolumna L – info nieedytowalne -->
       <div class="col s12 m4">
-        <img id="avatar-img" src="https://via.placeholder.com/120"
+        <img id="avatar-img" src="https://picsum.photos/120"
              style="width:120px;height:120px;border-radius:50%;object-fit:cover;display:block;margin:0 auto 10px">
         <h5 id="prof-name" class="center-align deep-purple-text text-darken-4">Imię Nazwisko</h5>
 
@@ -203,5 +206,12 @@
 
 <!-- Twoja logika frontu -->
 <script src="app.js"></script>
+
+<!-- Service Worker Registration -->
+<script>
+if ('serviceWorker' in navigator) {
+  navigator.serviceWorker.register('./sw.js');
+}
+</script>
 </body>
 </html>
