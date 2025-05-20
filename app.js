@@ -9,12 +9,12 @@ const PLACEHOLDER = 'https://picsum.photos/120';
 
 /* === API wrapper for POST requests ==================================== */
 async function api(action, payload = {}) {
-  const res = await fetch(API_BASE, {
+  const r = await fetch(API_BASE, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ action, ...payload })
   });
-  return res.json();
+  return r.json();
 }
 
 /* === tiny helpers ===================================================== */
@@ -41,17 +41,18 @@ $('#btn-login').addEventListener('click', async () => {
   busy(true);
 
   try {
-    const json = await api('login', { email, password: pass });
+    const res = await api('login', { email, password: pass });
     busy(false);
-    if (!json.success) {
-      $('#login-error').textContent = json.error || 'Błędne dane logowania';
+    if (!res.success) {
+      $('#login-error').textContent = res.error || 'Błędne dane logowania';
       return;
     }
-    me = json.user;
+    me = res.user;
     enterPanel();
   } catch (err) {
     busy(false);
     $('#login-error').textContent = err.message || 'Błąd logowania';
+    console.error(err);
   }
 });
 
@@ -101,17 +102,18 @@ $('#btn-save-profile').addEventListener('click', async e => {
   };
   busy(true);
   try {
-    const json = await api('profileUpd', { email: me['Email'], data: upd });
+    const res = await api('profileUpd', { email: me['Email'], data: upd });
     busy(false);
-    if (!json.success) {
-      $('#profile-msg').textContent = json.error || 'Błąd aktualizacji profilu';
+    if (!res.success) {
+      $('#profile-msg').textContent = res.error || 'Błąd aktualizacji profilu';
       return;
     }
-    $('#profile-msg').textContent = json.message || 'Profil zaktualizowany';
+    $('#profile-msg').textContent = res.message || 'Profil zaktualizowany';
     Object.assign(me, upd);
   } catch (err) {
     busy(false);
     $('#profile-msg').textContent = err.message || 'Błąd aktualizacji profilu';
+    console.error(err);
   }
 });
 
@@ -123,18 +125,19 @@ $('#avatar-file').addEventListener('change', async e => {
   reader.onload = async ev => {
     busy(true);
     try {
-      const json = await api('avatar', { email: me['Email'], base64: ev.target.result });
+      const res = await api('avatar', { email: me['Email'], base64: ev.target.result });
       busy(false);
-      if (!json.success) {
-        $('#profile-msg').textContent = json.error || 'Błąd przesyłania avatara';
+      if (!res.success) {
+        M.toast({ text: res.error || 'Błąd przesyłania avatara', classes: 'red' });
         return;
       }
-      me['Zdjęcie (URL)'] = json.url;
-      $('#avatar-img').src = json.url;
+      me['Zdjęcie (URL)'] = res.url;
+      $('#avatar-img').src = res.url;
       $('#profile-msg').textContent = 'Avatar zaktualizowany';
     } catch (err) {
       busy(false);
-      $('#profile-msg').textContent = err.message || 'Błąd przesyłania avatara';
+      M.toast({ text: err.message || 'Błąd przesyłania avatara', classes: 'red' });
+      console.error(err);
     }
   };
   reader.readAsDataURL(file);
@@ -145,10 +148,10 @@ $('#btn-delete-avatar').addEventListener('click', async () => {
   if (!confirm('Usunąć avatar?')) return;
   busy(true);
   try {
-    const json = await api('deleteAvatar', { email: me['Email'] });
+    const res = await api('deleteAvatar', { email: me['Email'] });
     busy(false);
-    if (!json.success) {
-      $('#profile-msg').textContent = json.error || 'Błąd usuwania avatara';
+    if (!res.success) {
+      M.toast({ text: res.error || 'Błąd usuwania avatara', classes: 'red' });
       return;
     }
     me['Zdjęcie (URL)'] = '';
@@ -156,7 +159,8 @@ $('#btn-delete-avatar').addEventListener('click', async () => {
     $('#profile-msg').textContent = 'Usunięto avatar';
   } catch (err) {
     busy(false);
-    $('#profile-msg').textContent = err.message || 'Błąd usuwania avatara';
+    M.toast({ text: err.message || 'Błąd usuwania avatara', classes: 'red' });
+    console.error(err);
   }
 });
 
@@ -165,17 +169,21 @@ $('#btn-delete-avatar').addEventListener('click', async () => {
    ======================================================================= */
 async function listYears() {
   try {
-    const json = await api('getYears');
-    if (!json.success) {
-      console.error(json.error || 'Błąd pobierania lat');
+    const res = await api('getYears');
+    if (!res.success) {
+      console.error(res.error || 'Błąd pobierania lat');
       return;
     }
-    const years = json.data;
     const sel = $('#sel-year');
-    sel.innerHTML = '<option value="" disabled selected>– Wybierz rok –</option>';
-    years.forEach(y => sel.insertAdjacentHTML('beforeend',
-      `<option value="${y}">${y}</option>`));
+    sel.innerHTML = '';
+    res.data.forEach((y, i) => {
+      sel.insertAdjacentHTML('beforeend',
+        `<option value="${y}" ${i === 0 ? 'selected' : ''}>${y}</option>`);
+    });
     M.FormSelect.init(sel);
+    curYear = res.data[0]; // najnowszy
+    loadAnnualSummary();
+    loadEntries();
   } catch (err) {
     console.error(err.message || 'Błąd pobierania lat');
   }
@@ -192,13 +200,13 @@ async function loadAnnualSummary() {
   if (!curYear) return;
   busy(true);
   try {
-    const json = await api('annual', { year: curYear, email: me['Email'] });
+    const res = await api('annual', { year: curYear, email: me['Email'] });
     busy(false);
-    if (!json.success) {
-      console.error(json.error || 'Błąd pobierania podsumowania');
+    if (!res.success) {
+      console.error(res.error || 'Błąd pobierania podsumowania');
       return;
     }
-    const data = json.data;
+    const data = res.data;
     $('#sum-crza').textContent = data['CRZ-A'] || 0;
     $('#sum-crzb').textContent = data['CRZ-B'] || 0;
     $('#sum-sup').textContent = data['Superwizje'] || 0;
@@ -217,13 +225,13 @@ async function loadEntries() {
   if (!curYear) return;
   busy(true);
   try {
-    const json = await api('getEntries', { year: curYear, email: me['Email'] });
+    const res = await api('getEntries', { year: curYear, email: me['Email'] });
     busy(false);
-    if (!json.success) {
-      console.error(json.error || 'Błąd pobierania wpisów');
+    if (!res.success) {
+      console.error(res.error || 'Błąd pobierania wpisów');
       return;
     }
-    const entries = json.data;
+    const entries = res.data;
     const ul = $('#entry-list');
     ul.innerHTML = '';
     if (!entries.length) {
@@ -234,7 +242,7 @@ async function loadEntries() {
           <li class="collection-item" data-id="${en.id}">
             <span>${en.type} — ${en.title}</span>
             <span class="secondary-content">
-              ${en.points ?? en.hours}
+              ${en.points ?? en.hours ?? ''}
               <a href="${en.file}" target="_blank"><i class="fas fa-file-pdf"></i></a>
               <a href="#!" class="del-entry"><i class="fas fa-trash red-text"></i></a>
             </span>
@@ -255,17 +263,18 @@ $('#entry-list').addEventListener('click', async e => {
   if (!confirm('Usunąć ten wpis?')) return;
   busy(true);
   try {
-    const json = await api('deleteEntry', { year: curYear, id, email: me['Email'] });
+    const res = await api('deleteEntry', { year: curYear, id, email: me['Email'] });
     busy(false);
-    if (!json.success) {
-      alert(json.error || 'Błąd usuwania wpisu');
+    if (!res.success) {
+      M.toast({ text: res.error || 'Błąd usuwania wpisu', classes: 'red' });
       return;
     }
     li.remove();
     loadAnnualSummary();
   } catch (err) {
     busy(false);
-    alert(err.message || 'Błąd usuwania wpisu');
+    M.toast({ text: err.message || 'Błąd usuwania wpisu', classes: 'red' });
+    console.error(err);
   }
 });
 
@@ -281,14 +290,19 @@ async function addEntry(type) {
   const fileInput = document.createElement('input');
   fileInput.type = 'file';
   fileInput.accept = 'application/pdf';
+  fileInput.style.display = 'none';
+  document.body.appendChild(fileInput);
   fileInput.onchange = async () => {
     const file = fileInput.files[0];
-    if (!file) return;
+    if (!file) {
+      document.body.removeChild(fileInput);
+      return;
+    }
     const reader = new FileReader();
     reader.onload = async ev => {
       busy(true);
       try {
-        const json = await api('addEntry', {
+        const res = await api('addEntry', {
           year: curYear,
           email: me['Email'],
           kind: type,
@@ -298,15 +312,18 @@ async function addEntry(type) {
           fileName: file.name
         });
         busy(false);
-        if (!json.success) {
-          alert(json.error || 'Błąd dodawania wpisu');
+        if (!res.success) {
+          M.toast({ text: res.error || 'Błąd dodawania wpisu', classes: 'red' });
           return;
         }
         loadAnnualSummary();
         loadEntries();
       } catch (err) {
         busy(false);
-        alert(err.message || 'Błąd dodawania wpisu');
+        M.toast({ text: err.message || 'Błąd dodawania wpisu', classes: 'red' });
+        console.error(err);
+      } finally {
+        document.body.removeChild(fileInput);
       }
     };
     reader.readAsDataURL(file);
