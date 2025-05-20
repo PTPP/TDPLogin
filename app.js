@@ -5,31 +5,33 @@
 /* === ENDPOINT to your deployed Apps Script Web App ==================== */
 const API_BASE =
   'https://script.google.com/macros/s/AKfycbz83zykcrg-WxAHkdIx0gz6qv3pz7wWISuLGG6KocIj4tM1rTZg3NvfLSA8Lz7OJxQY/exec';
+const PLACEHOLDER = 'https://picsum.photos/120';
+
+/* === API wrapper for POST requests ==================================== */
+async function api(action, payload = {}) {
+  const res = await fetch(API_BASE, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ action, ...payload })
+  });
+  return res.json();
+}
 
 /* === tiny helpers ===================================================== */
-const $  = (q, p = document) => p.querySelector(q);
+const $ = (q, p = document) => p.querySelector(q);
 const $$ = (q, p = document) => [...p.querySelectorAll(q)];
 const busy = on => ($('#spinner').style.display = on ? 'flex' : 'none');
 
-/* === JSONP wrapper for API calls ====================================== */
-function jsonp(params, cbName) {
-  const script = document.createElement('script');
-  script.src = `${API_BASE}?${params}&callback=${cbName}`;
-  document.body.appendChild(script);
-  // Clean up script tag after execution
-  script.onload = () => document.body.removeChild(script);
-}
-
 /* === global state ===================================================== */
-let me      = null;   // profil zalogowanego użytkownika
-let curYear = '';     // wybrany rok w zakładce 2
+let me = null;      // profil zalogowanego użytkownika
+let curYear = '';   // wybrany rok w zakładce 2
 
 /* =======================================================================
    1. LOGOWANIE
-   ===================================================================== */
-$('#btn-login').addEventListener('click', () => {
+   ======================================================================= */
+$('#btn-login').addEventListener('click', async () => {
   const email = $('#login-email').value.trim().toLowerCase();
-  const pass  = $('#login-pass').value.trim();
+  const pass = $('#login-pass').value.trim();
 
   if (!email || pass.length < 6) {
     $('#login-error').textContent = 'Popraw email i hasło (≥6 znaków)';
@@ -38,8 +40,8 @@ $('#btn-login').addEventListener('click', () => {
   $('#login-error').textContent = '';
   busy(true);
 
-  const params = new URLSearchParams({ action: 'login', email, password: pass }).toString();
-  window.onLogin = function(json) {
+  try {
+    const json = await api('login', { email, password: pass });
     busy(false);
     if (!json.success) {
       $('#login-error').textContent = json.error || 'Błędne dane logowania';
@@ -47,62 +49,59 @@ $('#btn-login').addEventListener('click', () => {
     }
     me = json.user;
     enterPanel();
-    delete window.onLogin;
-  };
-  jsonp(params, 'onLogin');
+  } catch (err) {
+    busy(false);
+    $('#login-error').textContent = err.message || 'Błąd logowania';
+  }
 });
 
 /* =======================================================================
    2. PANEL główny – po udanym logowaniu
-   ===================================================================== */
-function enterPanel () {
+   ======================================================================= */
+function enterPanel() {
   $('#login-card').style.display = 'none';
-  $('#navbar').style.display     = 'block';
-  $('#panel').style.display      = 'block';
+  $('#navbar').style.display = 'block';
+  $('#panel').style.display = 'block';
 
   fillProfileCard();
   listYears();
 }
 
-/* ----------  profil (zakładka 1)  ---------- */
-function fillProfileCard () {
-  $('#prof-name').textContent    = `${me['Imię']} ${me['Nazwisko']}`;
+/* ---------- profil (zakładka 1) ---------- */
+function fillProfileCard() {
+  $('#prof-name').textContent = `${me['Imię']} ${me['Nazwisko']}`;
   $('#prof-spec-no').textContent = me['Numer specjalisty'] ? `Numer ID: ${me['Numer specjalisty']}` : '';
-  $('#prof-level').textContent   = me['Poziom specjalisty'] ? `Poziom: ${me['Poziom specjalisty']}` : '';
+  $('#prof-level').textContent = me['Poziom specjalisty'] ? `Poziom: ${me['Poziom specjalisty']}` : '';
   $('#prof-specializations').textContent = me['Posiadane specjalizacje'] || '';
-  $('#avatar-img').src           = me['Zdjęcie (URL)'] || 'https://via.placeholder.com/120';
+  $('#avatar-img').src = me['Zdjęcie (URL)'] || PLACEHOLDER;
 
-  $('#f-phone-private').value    = me['Telefon prywatny']  || '';
-  $('#f-phone-reg').value        = me['Telefon (Kontakt)'] || '';
-  $('#f-email-login').value      = me['Email']             || '';
-  $('#f-email-public').value     = me['Email Publiczny']   || '';
-  $('#f-city').value             = me['Miejscowość']       || '';
-  $('#f-zip').value              = me['Kod pocztowy']      || '';
-  $('#f-street').value           = me['Ulica']             || '';
-  $('#f-bio').value              = me['Opis specjalisty']  || '';
+  $('#f-phone-private').value = me['Telefon prywatny'] || '';
+  $('#f-phone-reg').value = me['Telefon (Kontakt)'] || '';
+  $('#f-email-login').value = me['Email'] || '';
+  $('#f-email-public').value = me['Email Publiczny'] || '';
+  $('#f-city').value = me['Miejscowość'] || '';
+  $('#f-zip').value = me['Kod pocztowy'] || '';
+  $('#f-street').value = me['Ulica'] || '';
+  $('#f-bio').value = me['Opis specjalisty'] || '';
   M.updateTextFields();
 }
 
-/*  ---- zapisz profil ---- */
-$('#btn-save-profile').addEventListener('click', e => {
+/* ---- zapisz profil ---- */
+$('#btn-save-profile').addEventListener('click', async e => {
   e.preventDefault();
   const upd = {
-    'Telefon prywatny' : $('#f-phone-private').value.trim(),
-    'Telefon (Kontakt)' : $('#f-phone-reg').value.trim(),
-    'Email' : $('#f-email-login').value.trim().toLowerCase(),
-    'Email Publiczny' : $('#f-email-public').value.trim(),
-    'Miejscowość' : $('#f-city').value.trim(),
-    'Kod pocztowy' : $('#f-zip').value.trim(),
-    'Ulica' : $('#f-street').value.trim(),
-    'Opis specjalisty' : $('#f-bio').value.trim()
+    'Telefon prywatny': $('#f-phone-private').value.trim(),
+    'Telefon (Kontakt)': $('#f-phone-reg').value.trim(),
+    'Email': $('#f-email-login').value.trim().toLowerCase(),
+    'Email Publiczny': $('#f-email-public').value.trim(),
+    'Miejscowość': $('#f-city').value.trim(),
+    'Kod pocztowy': $('#f-zip').value.trim(),
+    'Ulica': $('#f-street').value.trim(),
+    'Opis specjalisty': $('#f-bio').value.trim()
   };
-  const params = new URLSearchParams({
-    action: 'profileUpd',
-    email: me['Email'],
-    data: JSON.stringify(upd)
-  }).toString();
   busy(true);
-  window.onProfileUpdate = function(json) {
+  try {
+    const json = await api('profileUpd', { email: me['Email'], data: upd });
     busy(false);
     if (!json.success) {
       $('#profile-msg').textContent = json.error || 'Błąd aktualizacji profilu';
@@ -110,24 +109,21 @@ $('#btn-save-profile').addEventListener('click', e => {
     }
     $('#profile-msg').textContent = json.message || 'Profil zaktualizowany';
     Object.assign(me, upd);
-    delete window.onProfileUpdate;
-  };
-  jsonp(params, 'onProfileUpdate');
+  } catch (err) {
+    busy(false);
+    $('#profile-msg').textContent = err.message || 'Błąd aktualizacji profilu';
+  }
 });
 
-/*  ---- upload avatar ---- */
-$('#avatar-file').addEventListener('change', e => {
+/* ---- upload avatar ---- */
+$('#avatar-file').addEventListener('change', async e => {
   const file = e.target.files[0];
   if (!file) return;
   const reader = new FileReader();
-  reader.onload = ev => {
-    const params = new URLSearchParams({
-      action: 'avatar',
-      email: me['Email'],
-      base64: ev.target.result
-    }).toString();
+  reader.onload = async ev => {
     busy(true);
-    window.onAvatarUpload = function(json) {
+    try {
+      const json = await api('avatar', { email: me['Email'], base64: ev.target.result });
       busy(false);
       if (!json.success) {
         $('#profile-msg').textContent = json.error || 'Błąd przesyłania avatara';
@@ -136,41 +132,40 @@ $('#avatar-file').addEventListener('change', e => {
       me['Zdjęcie (URL)'] = json.url;
       $('#avatar-img').src = json.url;
       $('#profile-msg').textContent = 'Avatar zaktualizowany';
-      delete window.onAvatarUpload;
-    };
-    jsonp(params, 'onAvatarUpload');
+    } catch (err) {
+      busy(false);
+      $('#profile-msg').textContent = err.message || 'Błąd przesyłania avatara';
+    }
   };
   reader.readAsDataURL(file);
 });
 
-/*  ---- usuń avatar ---- */
-$('#btn-delete-avatar').addEventListener('click', () => {
+/* ---- usuń avatar ---- */
+$('#btn-delete-avatar').addEventListener('click', async () => {
   if (!confirm('Usunąć avatar?')) return;
-  const params = new URLSearchParams({
-    action: 'deleteAvatar',
-    email: me['Email']
-  }).toString();
   busy(true);
-  window.onDeleteAvatar = function(json) {
+  try {
+    const json = await api('deleteAvatar', { email: me['Email'] });
     busy(false);
     if (!json.success) {
       $('#profile-msg').textContent = json.error || 'Błąd usuwania avatara';
       return;
     }
     me['Zdjęcie (URL)'] = '';
-    $('#avatar-img').src = 'https://via.placeholder.com/120';
+    $('#avatar-img').src = PLACEHOLDER;
     $('#profile-msg').textContent = 'Usunięto avatar';
-    delete window.onDeleteAvatar;
-  };
-  jsonp(params, 'onDeleteAvatar');
+  } catch (err) {
+    busy(false);
+    $('#profile-msg').textContent = err.message || 'Błąd usuwania avatara';
+  }
 });
 
 /* =======================================================================
-   3. Lata / podsumowanie / wpisy  (zakładka 2)
-   ===================================================================== */
-function listYears () {
-  const params = new URLSearchParams({ action: 'getYears' }).toString();
-  window.onYears = function(json) {
+   3. Lata / podsumowanie / wpisy (zakładka 2)
+   ======================================================================= */
+async function listYears() {
+  try {
+    const json = await api('getYears');
     if (!json.success) {
       console.error(json.error || 'Błąd pobierania lat');
       return;
@@ -181,9 +176,9 @@ function listYears () {
     years.forEach(y => sel.insertAdjacentHTML('beforeend',
       `<option value="${y}">${y}</option>`));
     M.FormSelect.init(sel);
-    delete window.onYears;
-  };
-  jsonp(params, 'onYears');
+  } catch (err) {
+    console.error(err.message || 'Błąd pobierania lat');
+  }
 }
 
 $('#sel-year').addEventListener('change', e => {
@@ -193,50 +188,44 @@ $('#sel-year').addEventListener('change', e => {
 });
 
 /* ---- podsumowanie roku ---- */
-function loadAnnualSummary () {
+async function loadAnnualSummary() {
   if (!curYear) return;
-  const params = new URLSearchParams({
-    action: 'annual',
-    year: curYear,
-    email: me['Email']
-  }).toString();
   busy(true);
-  window.onAnnualSummary = function(json) {
+  try {
+    const json = await api('annual', { year: curYear, email: me['Email'] });
     busy(false);
     if (!json.success) {
       console.error(json.error || 'Błąd pobierania podsumowania');
       return;
     }
     const data = json.data;
-    $('#sum-crza').textContent   = data['CRZ-A'] || 0;
-    $('#sum-crzb').textContent   = data['CRZ-B'] || 0;
-    $('#sum-sup').textContent    = data['Superwizje'] || 0;
-    $('#sum-fee').textContent    = data['Opłata za Rok'] || '–';
-    $('#sum-pp').textContent     = data['CertPP'] || '–';
-    $('#sum-cr').textContent     = data['Niekaralny'] || '–';
+    $('#sum-crza').textContent = data['CRZ-A'] || 0;
+    $('#sum-crzb').textContent = data['CRZ-B'] || 0;
+    $('#sum-sup').textContent = data['Superwizje'] || 0;
+    $('#sum-fee').textContent = data['Opłata za Rok'] || '–';
+    $('#sum-pp').textContent = data['CertPP'] || '–';
+    $('#sum-cr').textContent = data['Niekaralny'] || '–';
     $('#sum-active').textContent = data.active ? 'TAK' : 'NIE';
-    delete window.onAnnualSummary;
-  };
-  jsonp(params, 'onAnnualSummary');
+  } catch (err) {
+    busy(false);
+    console.error(err.message || 'Błąd pobierania podsumowania');
+  }
 }
 
 /* ---- lista wpisów ---- */
-function loadEntries () {
+async function loadEntries() {
   if (!curYear) return;
-  const params = new URLSearchParams({
-    action: 'getEntries',
-    year: curYear,
-    email: me['Email']
-  }).toString();
   busy(true);
-  window.onEntries = function(json) {
+  try {
+    const json = await api('getEntries', { year: curYear, email: me['Email'] });
     busy(false);
     if (!json.success) {
       console.error(json.error || 'Błąd pobierania wpisów');
       return;
     }
     const entries = json.data;
-    const ul = $('#entry-list'); ul.innerHTML = '';
+    const ul = $('#entry-list');
+    ul.innerHTML = '';
     if (!entries.length) {
       ul.innerHTML = '<li class="collection-item grey-text">Brak wpisów</li>';
     } else {
@@ -252,25 +241,21 @@ function loadEntries () {
           </li>`);
       });
     }
-    delete window.onEntries;
-  };
-  jsonp(params, 'onEntries');
+  } catch (err) {
+    busy(false);
+    console.error(err.message || 'Błąd pobierania wpisów');
+  }
 }
 
 /* ---- kasowanie wpisu ---- */
-$('#entry-list').addEventListener('click', e => {
+$('#entry-list').addEventListener('click', async e => {
   if (!e.target.closest('.del-entry')) return;
   const li = e.target.closest('li');
   const id = li.dataset.id;
   if (!confirm('Usunąć ten wpis?')) return;
-  const params = new URLSearchParams({
-    action: 'deleteEntry',
-    year: curYear,
-    id,
-    email: me['Email']
-  }).toString();
   busy(true);
-  window.onDeleteEntry = function(json) {
+  try {
+    const json = await api('deleteEntry', { year: curYear, id, email: me['Email'] });
     busy(false);
     if (!json.success) {
       alert(json.error || 'Błąd usuwania wpisu');
@@ -278,13 +263,14 @@ $('#entry-list').addEventListener('click', e => {
     }
     li.remove();
     loadAnnualSummary();
-    delete window.onDeleteEntry;
-  };
-  jsonp(params, 'onDeleteEntry');
+  } catch (err) {
+    busy(false);
+    alert(err.message || 'Błąd usuwania wpisu');
+  }
 });
 
 /* ---- dodawanie wpisów ---- */
-function addEntry (type) {
+async function addEntry(type) {
   if (!curYear) return M.toast({ text: 'Wybierz rok', classes: 'red' });
 
   const title = prompt(`Opis ${type}:`);
@@ -295,23 +281,22 @@ function addEntry (type) {
   const fileInput = document.createElement('input');
   fileInput.type = 'file';
   fileInput.accept = 'application/pdf';
-  fileInput.onchange = () => {
+  fileInput.onchange = async () => {
     const file = fileInput.files[0];
     if (!file) return;
     const reader = new FileReader();
-    reader.onload = ev => {
-      const params = new URLSearchParams({
-        action: 'addEntry',
-        year: curYear,
-        email: me['Email'],
-        kind: type,
-        hours,
-        desc: title,
-        base64: ev.target.result,
-        fileName: file.name
-      }).toString();
+    reader.onload = async ev => {
       busy(true);
-      window.onAddEntry = function(json) {
+      try {
+        const json = await api('addEntry', {
+          year: curYear,
+          email: me['Email'],
+          kind: type,
+          hours,
+          desc: title,
+          base64: ev.target.result,
+          fileName: file.name
+        });
         busy(false);
         if (!json.success) {
           alert(json.error || 'Błąd dodawania wpisu');
@@ -319,9 +304,10 @@ function addEntry (type) {
         }
         loadAnnualSummary();
         loadEntries();
-        delete window.onAddEntry;
-      };
-      jsonp(params, 'onAddEntry');
+      } catch (err) {
+        busy(false);
+        alert(err.message || 'Błąd dodawania wpisu');
+      }
     };
     reader.readAsDataURL(file);
   };
@@ -330,10 +316,10 @@ function addEntry (type) {
 
 $('#btn-add-crza').onclick = () => addEntry('CRZ-A');
 $('#btn-add-crzb').onclick = () => addEntry('CRZ-B');
-$('#btn-add-sup').onclick  = () => addEntry('Superwizje');
+$('#btn-add-sup').onclick = () => addEntry('Superwizje');
 
 /* =======================================================================
    4. INIT – Materialize zakładki
-   ===================================================================== */
+   ======================================================================= */
 document.addEventListener('DOMContentLoaded', () =>
   M.Tabs.init(document.querySelectorAll('.tabs')));
