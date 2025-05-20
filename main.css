@@ -1,0 +1,89 @@
+/* main.css */
+
+/* ── Spinner overlay ───────────────────────────────── */
+#spinner {
+  position: fixed;
+  inset: 0;
+  background: rgba(255,255,255,0.8);
+  display: none;
+  align-items: center;
+  justify-content: center;
+  z-index: 1000;
+}
+#spinner .preloader-wrapper {
+  width: 60px;
+  height: 60px;
+}
+
+/* ── Layout ───────────────────────────────────────────── */
+body {
+  font-family: "Roboto", sans-serif;
+  background: #f9f5fb;
+  margin: 0;
+  padding: 0;
+}
+nav {
+  background: #6a1b9a !important;
+}
+#navbar {
+  display: none;
+}
+#panel {
+  display: none;
+  padding: 24px;
+}
+
+/* ── Cards & Forms ───────────────────────────────────── */
+.card {
+  margin-bottom: 24px;
+}
+.input-field {
+  margin-top: 16px;
+}
+button.btn {
+  margin-top: 16px;
+}
+
+/* ── Profile tab ─────────────────────────────────────── */
+#profile-msg {
+  margin-top: 8px;
+  font-size: 0.9em;
+  color: #388e3c;
+}
+
+/* ── Avatar ──────────────────────────────────────────── */
+#avatar-img {
+  border-radius: 50%;
+  width: 120px;
+  height: 120px;
+  object-fit: cover;
+  margin-bottom: 16px;
+}
+
+/* ── Tabs ────────────────────────────────────────────── */
+.tabs .indicator {
+  background-color: #6a1b9a !important;
+}
+.tabs a {
+  color: #6a1b9a !important;
+}
+.tabs a.active {
+  background-color: #e1bee7 !important;
+  color: #4a148c !important;
+}
+
+/* ── Annual summary ─────────────────────────────────── */
+#annual-summary span {
+  font-weight: bold;
+  margin-right: 16px;
+}
+#entry-list .collection-item {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+/* ── Utility ────────────────────────────────────────── */
+.hidden { display: none !important; }
+.red-text { color: #c62828 !important; }
+.green-text { color: #2e7d32 !important; }
