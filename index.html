@@ -1,2 +1,207 @@
-<head>  Test </head>
-<body>AAA</body>
+<!DOCTYPE html>
+<html lang="pl">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>Panel Członka – TDP</title>
+
+  <!-- tutaj w przyszłości Twój arkusz stylów -->
+  <link rel="stylesheet" href="main.css">
+
+  <!-- Materialize (ICONS optional – można wyciąć) -->
+  <link rel="stylesheet"
+        href="https://cdnjs.cloudflare.com/ajax/libs/materialize/1.0.0/css/materialize.min.css">
+  <link rel="stylesheet"
+        href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+</head>
+<body>
+
+<!-- === SPINNER === -->
+<div id="spinner" class="valign-wrapper"
+     style="position:fixed;inset:0;background:rgba(255,255,255,.7);display:none;z-index:999">
+  <div class="preloader-wrapper big active">
+    <div class="spinner-layer spinner-purple-only">
+      <div class="circle-clipper left"><div class="circle"></div></div>
+      <div class="gap-patch"><div class="circle"></div></div>
+      <div class="circle-clipper right"><div class="circle"></div></div>
+    </div>
+  </div>
+</div>
+
+<!-- === NAV === -->
+<nav class="deep-purple" id="navbar" style="display:none">
+  <div class="nav-wrapper"><span class="brand-logo center">Panel Członka</span></div>
+</nav>
+
+<!-- === LOGOWANIE === -->
+<div id="login-card" class="container" style="max-width:420px;margin-top:60px">
+  <div class="card">
+    <div class="card-content">
+      <span class="card-title deep-purple-text text-darken-4 center-align">
+        <i class="fas fa-user-lock"></i> Logowanie
+      </span>
+
+      <div class="input-field">
+        <input id="login-email" type="email">
+        <label for="login-email">Email</label>
+      </div>
+
+      <div class="input-field">
+        <input id="login-pass" type="password" minlength="6">
+        <label for="login-pass">Hasło (min 6 znaków)</label>
+      </div>
+
+      <div class="center-align" style="margin-top:22px">
+        <button id="btn-login" class="btn deep-purple"><i class="fas fa-sign-in-alt"></i> Zaloguj</button>
+      </div>
+
+      <p id="login-error" class="red-text center-align" style="margin-top:16px"></p>
+    </div>
+  </div>
+</div>
+
+<!-- === PANEL === -->
+<div id="panel" class="container" style="display:none;margin-top:24px">
+
+  <!-- TABS -->
+  <ul class="tabs">
+    <li class="tab col s3"><a href="#tab-profile" class="active">Profil</a></li>
+    <li class="tab col s3"><a href="#tab-annual">Punkty / Godziny</a></li>
+    <li class="tab col s3"><a href="#tab-instrukcje">Instrukcje</a></li>
+  </ul>
+
+  <!-- ──────── PROFIL ──────── -->
+  <div id="tab-profile" class="section">
+
+    <div class="row">
+      <!-- kolumna L – info nieedytowalne -->
+      <div class="col s12 m4">
+        <img id="avatar-img" src="https://via.placeholder.com/120"
+             style="width:120px;height:120px;border-radius:50%;object-fit:cover;display:block;margin:0 auto 10px">
+        <h5 id="prof-name" class="center-align deep-purple-text text-darken-4">Imię Nazwisko</h5>
+
+        <p class="center-align" id="prof-spec-no"></p>
+        <p class="center-align" id="prof-level"></p>
+        <p class="center-align" id="prof-specializations"></p>
+      </div>
+
+      <!-- kolumna P – edytowalne -->
+      <div class="col s12 m8">
+        <form id="profile-form">
+          <!-- rzad 1 -->
+          <div class="row">
+            <div class="input-field col s12 m6">
+              <input id="f-phone-private" type="text">
+              <label for="f-phone-private">Telefon prywatny</label>
+            </div>
+            <div class="input-field col s12 m6">
+              <input id="f-phone-reg" type="text">
+              <label for="f-phone-reg">Telefon rejestracji</label>
+            </div>
+          </div>
+
+          <!-- rzad 2 -->
+          <div class="row">
+            <div class="input-field col s12 m6">
+              <input id="f-email-login" type="email">
+              <label for="f-email-login">Email (logowanie)</label>
+            </div>
+            <div class="input-field col s12 m6">
+              <input id="f-email-public" type="email">
+              <label for="f-email-public">Email kontaktowy</label>
+            </div>
+          </div>
+
+          <!-- rzad 3 -->
+          <div class="row">
+            <div class="input-field col s12 m4">
+              <input id="f-city" type="text">
+              <label for="f-city">Miejscowość</label>
+            </div>
+            <div class="input-field col s12 m4">
+              <input id="f-zip" type="text">
+              <label for="f-zip">Kod pocztowy</label>
+            </div>
+            <div class="input-field col s12 m4">
+              <input id="f-street" type="text">
+              <label for="f-street">Ulica / nr</label>
+            </div>
+          </div>
+
+          <!-- opis -->
+          <div class="input-field">
+            <textarea id="f-bio" class="materialize-textarea"></textarea>
+            <label for="f-bio">Opis specjalisty</label>
+          </div>
+
+          <!-- avatar -->
+          <div class="file-field input-field">
+            <div class="btn grey">
+              <span><i class="fas fa-image"></i> Avatar</span>
+              <input type="file" id="avatar-file" accept="image/*">
+            </div>
+            <div class="file-path-wrapper">
+              <input class="file-path validate" type="text" placeholder="Wybierz zdjęcie JPG/PNG">
+            </div>
+          </div>
+
+          <div class="right-align">
+            <button id="btn-save-profile" class="btn deep-purple">Zapisz</button>
+            <button id="btn-delete-avatar" class="btn-flat red-text">Usuń avatar</button>
+          </div>
+
+          <p id="profile-msg" class="center-align" style="margin-top:12px"></p>
+        </form>
+      </div>
+    </div>
+  </div>
+
+  <!-- ──────── ANNUAL ──────── -->
+  <div id="tab-annual" class="section">
+
+    <div class="row">
+      <div class="input-field col s12 m4">
+        <select id="sel-year"></select>
+        <label>Rok</label>
+      </div>
+      <div class="col s12 m8 right-align" style="margin-top:24px">
+        <button id="btn-add-crza" class="btn green">+ CRZ-A</button>
+        <button id="btn-add-crzb" class="btn green">+ CRZ-B</button>
+        <button id="btn-add-sup"  class="btn green">+ Superwizja</button>
+      </div>
+    </div>
+
+    <!-- tabela sum -->
+    <table class="striped" id="annual-summary">
+      <thead><tr><th>Parametr</th><th>Wartość</th></tr></thead>
+      <tbody>
+        <tr><th>CRZ-A (pkt)</th><td id="sum-crza">0</td></tr>
+        <tr><th>CRZ-B (pkt)</th><td id="sum-crzb">0</td></tr>
+        <tr><th>Superwizje (h)</th><td id="sum-sup">0</td></tr>
+        <tr><th>Opłata za rok</th><td id="sum-fee">–</td></tr>
+        <tr><th>Certyfikat PP</th><td id="sum-pp">–</td></tr>
+        <tr><th>Niekaralność</th><td id="sum-cr">–</td></tr>
+        <tr><th>Status członkostwa</th><td id="sum-active">–</td></tr>
+      </tbody>
+    </table>
+
+    <!-- lista wpisów -->
+    <h6 class="deep-purple-text text-darken-4" style="margin-top:32px">Wpisy roczne</h6>
+    <ul id="entry-list" class="collection"></ul>
+  </div>
+
+  <!-- ──────── INSTRUKCJE ──────── -->
+  <div id="tab-instrukcje" class="section">
+    <p>Tutaj dodamy opis obsługi po ukończeniu funkcjonalności.</p>
+  </div>
+
+</div>
+
+<!-- Materialize JS -->
+<script
+  src="https://cdnjs.cloudflare.com/ajax/libs/materialize/1.0.0/js/materialize.min.js"></script>
+
+<!-- Twoja logika frontu -->
+<script src="app.js"></script>
+</body>
+</html>
