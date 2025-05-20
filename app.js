@@ -11,19 +11,6 @@ const $  = (q, p = document) => p.querySelector(q);
 const $$ = (q, p = document) => [...p.querySelectorAll(q)];
 const busy = on => ($('#spinner').style.display = on ? 'flex' : 'none');
 
-/* === JSONP wrapper for API calls ====================================== */
-function apiCall(params, cbName, cb) {
-  const query = new URLSearchParams({ ...params, callback: cbName });
-  const script = document.createElement('script');
-  script.src = `${API_BASE}?${query}`;
-  window[cbName] = function(data) {
-    cb(data);
-    delete window[cbName];
-    document.head.removeChild(script);
-  };
-  document.head.appendChild(script);
-}
-
 /* === global state ===================================================== */
 let me      = null;   // profil zalogowanego użytkownika
 let curYear = '';     // wybrany rok w zakładce 2
@@ -31,7 +18,7 @@ let curYear = '';     // wybrany rok w zakładce 2
 /* =======================================================================
    1. LOGOWANIE
    ===================================================================== */
-$('#btn-login').addEventListener('click', () => {
+$('#btn-login').addEventListener('click', async () => {
   const email = $('#login-email').value.trim().toLowerCase();
   const pass  = $('#login-pass').value.trim();
 
@@ -41,19 +28,23 @@ $('#btn-login').addEventListener('click', () => {
   }
   $('#login-error').textContent = '';
   busy(true);
-  apiCall(
-    { action: 'login', email, password: pass },
-    'onLoginResponse',
-    function(data) {
-      busy(false);
-      if (data.error) {
-        $('#login-error').textContent = data.error;
-        return;
-      }
-      me = data;
-      enterPanel();
+
+  const params = new URLSearchParams({ action: 'login', email, password: pass });
+  try {
+    const res = await fetch(`${API_BASE}?${params}`, { method: 'GET' });
+    const json = await res.json();
+    busy(false);
+
+    if (!json.success) {
+      $('#login-error').textContent = json.error || 'Błędne dane logowania';
+      return;
     }
-  );
+    me = json.user;
+    enterPanel();
+  } catch (err) {
+    busy(false);
+    $('#login-error').textContent = err.message;
+  }
 });
 
 /* =======================================================================
@@ -88,7 +79,7 @@ function fillProfileCard () {
 }
 
 /*  ---- zapisz profil ---- */
-$('#btn-save-profile').addEventListener('click', e => {
+$('#btn-save-profile').addEventListener('click', async e => {
   e.preventDefault();
   const upd = {
     'Telefon prywatny' : $('#f-phone-private').value.trim(),
@@ -100,87 +91,98 @@ $('#btn-save-profile').addEventListener('click', e => {
     'Ulica' : $('#f-street').value.trim(),
     'Opis specjalisty' : $('#f-bio').value.trim()
   };
+  const params = new URLSearchParams({ action: 'profileUpd', email: me['Email'], data: JSON.stringify(upd) });
   busy(true);
-  apiCall(
-    { action: 'profileUpd', email: me['Email'], data: JSON.stringify(upd) },
-    'onProfileUpdateResponse',
-    function(data) {
-      busy(false);
-      if (data.error) {
-        $('#profile-msg').textContent = data.error;
-        return;
-      }
-      $('#profile-msg').textContent = 'Profil zaktualizowany';
-      Object.assign(me, upd);
+  try {
+    const res = await fetch(`${API_BASE}?${params}`, { method: 'GET' });
+    const json = await res.json();
+    busy(false);
+    if (!json.success) {
+      $('#profile-msg').textContent = json.error || 'Błąd aktualizacji profilu';
+      return;
     }
-  );
+    $('#profile-msg').textContent = json.message || 'Profil zaktualizowany';
+    Object.assign(me, upd);
+  } catch (err) {
+    busy(false);
+    $('#profile-msg').textContent = err.message;
+  }
 });
 
 /*  ---- upload avatar ---- */
-$('#avatar-file').addEventListener('change', e => {
+$('#avatar-file').addEventListener('change', async e => {
   const file = e.target.files[0];
   if (!file) return;
   const reader = new FileReader();
-  reader.onload = ev => {
+  reader.onload = async ev => {
+    const params = new URLSearchParams({
+      action: 'avatar',
+      email: me['Email'],
+      base64: ev.target.result
+    });
     busy(true);
-    apiCall(
-      { action: 'avatar', email: me['Email'], base64: ev.target.result },
-      'onAvatarUploadResponse',
-      function(data) {
-        busy(false);
-        if (data.error) {
-          $('#profile-msg').textContent = data.error;
-          return;
-        }
-        me['Zdjęcie (URL)'] = data;
-        $('#avatar-img').src = data;
-        $('#profile-msg').textContent = 'Avatar zaktualizowany';
+    try {
+      const res = await fetch(`${API_BASE}?${params}`, { method: 'GET' });
+      const json = await res.json();
+      busy(false);
+      if (!json.success) {
+        $('#profile-msg').textContent = json.error || 'Błąd przesyłania avatara';
+        return;
       }
-    );
+      me['Zdjęcie (URL)'] = json.url;
+      $('#avatar-img').src = json.url;
+      $('#profile-msg').textContent = 'Avatar zaktualizowany';
+    } catch (err) {
+      busy(false);
+      $('#profile-msg').textContent = err.message;
+    }
   };
   reader.readAsDataURL(file);
 });
 
 /*  ---- usuń avatar ---- */
-$('#btn-delete-avatar').addEventListener('click', () => {
+$('#btn-delete-avatar').addEventListener('click', async () => {
   if (!confirm('Usunąć avatar?')) return;
+  const params = new URLSearchParams({ action: 'deleteAvatar', email: me['Email'] });
   busy(true);
-  apiCall(
-    { action: 'deleteAvatar', email: me['Email'] },
-    'onDeleteAvatarResponse',
-    function(data) {
-      busy(false);
-      if (data.error) {
-        $('#profile-msg').textContent = data.error;
-        return;
-      }
-      me['Zdjęcie (URL)'] = '';
-      $('#avatar-img').src = 'https://via.placeholder.com/120';
-      $('#profile-msg').textContent = 'Usunięto avatar';
+  try {
+    const res = await fetch(`${API_BASE}?${params}`, { method: 'GET' });
+    const json = await res.json();
+    busy(false);
+    if (!json.success) {
+      $('#profile-msg').textContent = json.error || 'Błąd usuwania avatara';
+      return;
     }
-  );
+    me['Zdjęcie (URL)'] = '';
+    $('#avatar-img').src = 'https://via.placeholder.com/120';
+    $('#profile-msg').textContent = 'Usunięto avatar';
+  } catch (err) {
+    busy(false);
+    $('#profile-msg').textContent = err.message;
+  }
 });
 
 /* =======================================================================
    3. Lata / podsumowanie / wpisy  (zakładka 2)
    ===================================================================== */
-function listYears () {
-  apiCall(
-    { action: 'getYears' },
-    'onYearsResponse',
-    function(data) {
-      if (data.error) {
-        console.error(data.error);
-        return;
-      }
-      const years = data;
-      const sel = $('#sel-year');
-      sel.innerHTML = '<option value="" disabled selected>– Wybierz rok –</option>';
-      years.forEach(y => sel.insertAdjacentHTML('beforeend',
-        `<option value="${y}">${y}</option>`));
-      M.FormSelect.init(sel);
+async function listYears () {
+  const params = new URLSearchParams({ action: 'getYears' });
+  try {
+    const res = await fetch(`${API_BASE}?${params}`, { method: 'GET' });
+    const json = await res.json();
+    if (!json.success) {
+      console.error(json.error || 'Błąd pobierania lat');
+      return;
     }
-  );
+    const years = json.data;
+    const sel = $('#sel-year');
+    sel.innerHTML = '<option value="" disabled selected>– Wybierz rok –</option>';
+    years.forEach(y => sel.insertAdjacentHTML('beforeend',
+      `<option value="${y}">${y}</option>`));
+    M.FormSelect.init(sel);
+  } catch (e) {
+    console.error(e);
+  }
 }
 
 $('#sel-year').addEventListener('change', e => {
@@ -190,87 +192,94 @@ $('#sel-year').addEventListener('change', e => {
 });
 
 /* ---- podsumowanie roku ---- */
-function loadAnnualSummary () {
+async function loadAnnualSummary () {
   if (!curYear) return;
+  const params = new URLSearchParams({ action: 'annual', year: curYear, email: me['Email'] });
   busy(true);
-  apiCall(
-    { action: 'annual', year: curYear, email: me['Email'] },
-    'onAnnualSummaryResponse',
-    function(data) {
-      busy(false);
-      if (data.error) {
-        console.error(data.error);
-        return;
-      }
-      $('#sum-crza').textContent   = data['CRZ-A'] || 0;
-      $('#sum-crzb').textContent   = data['CRZ-B'] || 0;
-      $('#sum-sup').textContent    = data['Superwizje'] || 0;
-      $('#sum-fee').textContent    = data['Opłata za Rok'] || '–';
-      $('#sum-pp').textContent     = data['CertPP'] || '–';
-      $('#sum-cr').textContent     = data['Niekaralny'] || '–';
-      $('#sum-active').textContent = data.active ? 'TAK' : 'NIE';
+  try {
+    const res = await fetch(`${API_BASE}?${params}`, { method: 'GET' });
+    const json = await res.json();
+    busy(false);
+    if (!json.success) {
+      console.error(json.error || 'Błąd pobierania podsumowania');
+      return;
     }
-  );
+    const data = json.data;
+    $('#sum-crza').textContent   = data['CRZ-A'] || 0;
+    $('#sum-crzb').textContent   = data['CRZ-B'] || 0;
+    $('#sum-sup').textContent    = data['Superwizje'] || 0;
+    $('#sum-fee').textContent    = data['Opłata za Rok'] || '–';
+    $('#sum-pp').textContent     = data['CertPP'] || '–';
+    $('#sum-cr').textContent     = data['Niekaralny'] || '–';
+    $('#sum-active').textContent = data.active ? 'TAK' : 'NIE';
+  } catch (e) {
+    busy(false);
+    console.error(e);
+  }
 }
 
 /* ---- lista wpisów ---- */
-function loadEntries () {
+async function loadEntries () {
   if (!curYear) return;
+  const params = new URLSearchParams({ action: 'getEntries', year: curYear, email: me['Email'] });
   busy(true);
-  apiCall(
-    { action: 'getEntries', year: curYear, email: me['Email'] },
-    'onEntriesResponse',
-    function(data) {
-      busy(false);
-      if (data.error) {
-        console.error(data.error);
-        return;
-      }
-      const entries = data;
-      const ul = $('#entry-list'); ul.innerHTML = '';
-      if (!entries.length) {
-        ul.innerHTML = '<li class="collection-item grey-text">Brak wpisów</li>';
-      } else {
-        entries.forEach(en => {
-          ul.insertAdjacentHTML('beforeend', `
-            <li class="collection-item" data-id="${en.id}">
-              <span>${en.type} — ${en.title}</span>
-              <span class="secondary-content">
-                ${en.points ?? en.hours}
-                <a href="${en.file}" target="_blank"><i class="fas fa-file-pdf"></i></a>
-                <a href="#!" class="del-entry"><i class="fas fa-trash red-text"></i></a>
-              </span>
-            </li>`);
-        });
-      }
+  try {
+    const res = await fetch(`${API_BASE}?${params}`, { method: 'GET' });
+    const json = await res.json();
+    busy(false);
+    if (!json.success) {
+      console.error(json.error || 'Błąd pobierania wpisów');
+      return;
     }
-  );
+    const entries = json.data;
+    const ul = $('#entry-list'); ul.innerHTML = '';
+    if (!entries.length) {
+      ul.innerHTML = '<li class="collection-item grey-text">Brak wpisów</li>';
+    } else {
+      entries.forEach(en => {
+        ul.insertAdjacentHTML('beforeend', `
+          <li class="collection-item" data-id="${en.id}">
+            <span>${en.type} — ${en.title}</span>
+            <span class="secondary-content">
+              ${en.points ?? en.hours}
+              <a href="${en.file}" target="_blank"><i class="fas fa-file-pdf"></i></a>
+              <a href="#!" class="del-entry"><i class="fas fa-trash red-text"></i></a>
+            </span>
+          </li>`);
+      });
+    }
+  } catch (e) {
+    busy(false);
+    console.error(e);
+  }
 }
 
 /* ---- kasowanie wpisu ---- */
-$('#entry-list').addEventListener('click', e => {
+$('#entry-list').addEventListener('click', async e => {
   if (!e.target.closest('.del-entry')) return;
   const li = e.target.closest('li');
   const id = li.dataset.id;
   if (!confirm('Usunąć ten wpis?')) return;
+  const params = new URLSearchParams({ action: 'deleteEntry', year: curYear, id, email: me['Email'] });
   busy(true);
-  apiCall(
-    { action: 'deleteEntry', year: curYear, id, email: me['Email'] },
-    'onDeleteEntryResponse',
-    function(data) {
-      busy(false);
-      if (data.error) {
-        alert(data.error);
-        return;
-      }
-      li.remove();
-      loadAnnualSummary();
+  try {
+    const res = await fetch(`${API_BASE}?${params}`, { method: 'GET' });
+    const json = await res.json();
+    busy(false);
+    if (!json.success) {
+      alert(json.error || 'Błąd usuwania wpisu');
+      return;
     }
-  );
+    li.remove();
+    loadAnnualSummary();
+  } catch (err) {
+    busy(false);
+    alert(err.message);
+  }
 });
 
 /* ---- dodawanie wpisów ---- */
-function addEntry (type) {
+async function addEntry (type) {
   if (!curYear) return M.toast({ text: 'Wybierz rok', classes: 'red' });
 
   const title = prompt(`Opis ${type}:`);
@@ -281,34 +290,36 @@ function addEntry (type) {
   const fileInput = document.createElement('input');
   fileInput.type = 'file';
   fileInput.accept = 'application/pdf';
-  fileInput.onchange = () => {
+  fileInput.onchange = async () => {
     const file = fileInput.files[0];
     if (!file) return;
     const reader = new FileReader();
-    reader.onload = ev => {
+    reader.onload = async ev => {
+      const params = new URLSearchParams({
+        action: 'addEntry',
+        year: curYear,
+        email: me['Email'],
+        kind: type,
+        hours,
+        desc: title,
+        base64: ev.target.result,
+        fileName: file.name
+      });
       busy(true);
-      apiCall(
-        {
-          action: 'addEntry',
-          year: curYear,
-          email: me['Email'],
-          kind: type,
-          hours,
-          desc: title,
-          base64: ev.target.result,
-          fileName: file.name
-        },
-        'onAddEntryResponse',
-        function(data) {
-          busy(false);
-          if (data.error) {
-            alert(data.error);
-            return;
-          }
-          loadAnnualSummary();
-          loadEntries();
+      try {
+        const res = await fetch(`${API_BASE}?${params}`, { method: 'GET' });
+        const json = await res.json();
+        busy(false);
+        if (!json.success) {
+          alert(json.error || 'Błąd dodawania wpisu');
+          return;
         }
-      );
+        loadAnnualSummary();
+        loadEntries();
+      } catch (err) {
+        busy(false);
+        alert(err.message);
+      }
     };
     reader.readAsDataURL(file);
   };
