@@ -11,6 +11,15 @@ const $  = (q, p = document) => p.querySelector(q);
 const $$ = (q, p = document) => [...p.querySelectorAll(q)];
 const busy = on => ($('#spinner').style.display = on ? 'flex' : 'none');
 
+/* === JSONP wrapper for API calls ====================================== */
+function jsonp(params, cbName) {
+  const script = document.createElement('script');
+  script.src = `${API_BASE}?${params}&callback=${cbName}`;
+  document.body.appendChild(script);
+  // Clean up script tag after execution
+  script.onload = () => document.body.removeChild(script);
+}
+
 /* === global state ===================================================== */
 let me      = null;   // profil zalogowanego użytkownika
 let curYear = '';     // wybrany rok w zakładce 2
@@ -18,7 +27,7 @@ let curYear = '';     // wybrany rok w zakładce 2
 /* =======================================================================
    1. LOGOWANIE
    ===================================================================== */
-$('#btn-login').addEventListener('click', async () => {
+$('#btn-login').addEventListener('click', () => {
   const email = $('#login-email').value.trim().toLowerCase();
   const pass  = $('#login-pass').value.trim();
 
@@ -29,22 +38,18 @@ $('#btn-login').addEventListener('click', async () => {
   $('#login-error').textContent = '';
   busy(true);
 
-  const params = new URLSearchParams({ action: 'login', email, password: pass });
-  try {
-    const res = await fetch(`${API_BASE}?${params}`, { method: 'GET' });
-    const json = await res.json();
+  const params = new URLSearchParams({ action: 'login', email, password: pass }).toString();
+  window.onLogin = function(json) {
     busy(false);
-
     if (!json.success) {
       $('#login-error').textContent = json.error || 'Błędne dane logowania';
       return;
     }
     me = json.user;
     enterPanel();
-  } catch (err) {
-    busy(false);
-    $('#login-error').textContent = err.message;
-  }
+    delete window.onLogin;
+  };
+  jsonp(params, 'onLogin');
 });
 
 /* =======================================================================
@@ -79,7 +84,7 @@ function fillProfileCard () {
 }
 
 /*  ---- zapisz profil ---- */
-$('#btn-save-profile').addEventListener('click', async e => {
+$('#btn-save-profile').addEventListener('click', e => {
   e.preventDefault();
   const upd = {
     'Telefon prywatny' : $('#f-phone-private').value.trim(),
@@ -91,11 +96,13 @@ $('#btn-save-profile').addEventListener('click', async e => {
     'Ulica' : $('#f-street').value.trim(),
     'Opis specjalisty' : $('#f-bio').value.trim()
   };
-  const params = new URLSearchParams({ action: 'profileUpd', email: me['Email'], data: JSON.stringify(upd) });
+  const params = new URLSearchParams({
+    action: 'profileUpd',
+    email: me['Email'],
+    data: JSON.stringify(upd)
+  }).toString();
   busy(true);
-  try {
-    const res = await fetch(`${API_BASE}?${params}`, { method: 'GET' });
-    const json = await res.json();
+  window.onProfileUpdate = function(json) {
     busy(false);
     if (!json.success) {
       $('#profile-msg').textContent = json.error || 'Błąd aktualizacji profilu';
@@ -103,27 +110,24 @@ $('#btn-save-profile').addEventListener('click', async e => {
     }
     $('#profile-msg').textContent = json.message || 'Profil zaktualizowany';
     Object.assign(me, upd);
-  } catch (err) {
-    busy(false);
-    $('#profile-msg').textContent = err.message;
-  }
+    delete window.onProfileUpdate;
+  };
+  jsonp(params, 'onProfileUpdate');
 });
 
 /*  ---- upload avatar ---- */
-$('#avatar-file').addEventListener('change', async e => {
+$('#avatar-file').addEventListener('change', e => {
   const file = e.target.files[0];
   if (!file) return;
   const reader = new FileReader();
-  reader.onload = async ev => {
+  reader.onload = ev => {
     const params = new URLSearchParams({
       action: 'avatar',
       email: me['Email'],
       base64: ev.target.result
-    });
+    }).toString();
     busy(true);
-    try {
-      const res = await fetch(`${API_BASE}?${params}`, { method: 'GET' });
-      const json = await res.json();
+    window.onAvatarUpload = function(json) {
       busy(false);
       if (!json.success) {
         $('#profile-msg').textContent = json.error || 'Błąd przesyłania avatara';
@@ -132,22 +136,22 @@ $('#avatar-file').addEventListener('change', async e => {
       me['Zdjęcie (URL)'] = json.url;
       $('#avatar-img').src = json.url;
       $('#profile-msg').textContent = 'Avatar zaktualizowany';
-    } catch (err) {
-      busy(false);
-      $('#profile-msg').textContent = err.message;
-    }
+      delete window.onAvatarUpload;
+    };
+    jsonp(params, 'onAvatarUpload');
   };
   reader.readAsDataURL(file);
 });
 
 /*  ---- usuń avatar ---- */
-$('#btn-delete-avatar').addEventListener('click', async () => {
+$('#btn-delete-avatar').addEventListener('click', () => {
   if (!confirm('Usunąć avatar?')) return;
-  const params = new URLSearchParams({ action: 'deleteAvatar', email: me['Email'] });
+  const params = new URLSearchParams({
+    action: 'deleteAvatar',
+    email: me['Email']
+  }).toString();
   busy(true);
-  try {
-    const res = await fetch(`${API_BASE}?${params}`, { method: 'GET' });
-    const json = await res.json();
+  window.onDeleteAvatar = function(json) {
     busy(false);
     if (!json.success) {
       $('#profile-msg').textContent = json.error || 'Błąd usuwania avatara';
@@ -156,20 +160,17 @@ $('#btn-delete-avatar').addEventListener('click', async () => {
     me['Zdjęcie (URL)'] = '';
     $('#avatar-img').src = 'https://via.placeholder.com/120';
     $('#profile-msg').textContent = 'Usunięto avatar';
-  } catch (err) {
-    busy(false);
-    $('#profile-msg').textContent = err.message;
-  }
+    delete window.onDeleteAvatar;
+  };
+  jsonp(params, 'onDeleteAvatar');
 });
 
 /* =======================================================================
    3. Lata / podsumowanie / wpisy  (zakładka 2)
    ===================================================================== */
-async function listYears () {
-  const params = new URLSearchParams({ action: 'getYears' });
-  try {
-    const res = await fetch(`${API_BASE}?${params}`, { method: 'GET' });
-    const json = await res.json();
+function listYears () {
+  const params = new URLSearchParams({ action: 'getYears' }).toString();
+  window.onYears = function(json) {
     if (!json.success) {
       console.error(json.error || 'Błąd pobierania lat');
       return;
@@ -180,9 +181,9 @@ async function listYears () {
     years.forEach(y => sel.insertAdjacentHTML('beforeend',
       `<option value="${y}">${y}</option>`));
     M.FormSelect.init(sel);
-  } catch (e) {
-    console.error(e);
-  }
+    delete window.onYears;
+  };
+  jsonp(params, 'onYears');
 }
 
 $('#sel-year').addEventListener('change', e => {
@@ -192,13 +193,15 @@ $('#sel-year').addEventListener('change', e => {
 });
 
 /* ---- podsumowanie roku ---- */
-async function loadAnnualSummary () {
+function loadAnnualSummary () {
   if (!curYear) return;
-  const params = new URLSearchParams({ action: 'annual', year: curYear, email: me['Email'] });
+  const params = new URLSearchParams({
+    action: 'annual',
+    year: curYear,
+    email: me['Email']
+  }).toString();
   busy(true);
-  try {
-    const res = await fetch(`${API_BASE}?${params}`, { method: 'GET' });
-    const json = await res.json();
+  window.onAnnualSummary = function(json) {
     busy(false);
     if (!json.success) {
       console.error(json.error || 'Błąd pobierania podsumowania');
@@ -212,20 +215,21 @@ async function loadAnnualSummary () {
     $('#sum-pp').textContent     = data['CertPP'] || '–';
     $('#sum-cr').textContent     = data['Niekaralny'] || '–';
     $('#sum-active').textContent = data.active ? 'TAK' : 'NIE';
-  } catch (e) {
-    busy(false);
-    console.error(e);
-  }
+    delete window.onAnnualSummary;
+  };
+  jsonp(params, 'onAnnualSummary');
 }
 
 /* ---- lista wpisów ---- */
-async function loadEntries () {
+function loadEntries () {
   if (!curYear) return;
-  const params = new URLSearchParams({ action: 'getEntries', year: curYear, email: me['Email'] });
+  const params = new URLSearchParams({
+    action: 'getEntries',
+    year: curYear,
+    email: me['Email']
+  }).toString();
   busy(true);
-  try {
-    const res = await fetch(`${API_BASE}?${params}`, { method: 'GET' });
-    const json = await res.json();
+  window.onEntries = function(json) {
     busy(false);
     if (!json.success) {
       console.error(json.error || 'Błąd pobierania wpisów');
@@ -248,23 +252,25 @@ async function loadEntries () {
           </li>`);
       });
     }
-  } catch (e) {
-    busy(false);
-    console.error(e);
-  }
+    delete window.onEntries;
+  };
+  jsonp(params, 'onEntries');
 }
 
 /* ---- kasowanie wpisu ---- */
-$('#entry-list').addEventListener('click', async e => {
+$('#entry-list').addEventListener('click', e => {
   if (!e.target.closest('.del-entry')) return;
   const li = e.target.closest('li');
   const id = li.dataset.id;
   if (!confirm('Usunąć ten wpis?')) return;
-  const params = new URLSearchParams({ action: 'deleteEntry', year: curYear, id, email: me['Email'] });
+  const params = new URLSearchParams({
+    action: 'deleteEntry',
+    year: curYear,
+    id,
+    email: me['Email']
+  }).toString();
   busy(true);
-  try {
-    const res = await fetch(`${API_BASE}?${params}`, { method: 'GET' });
-    const json = await res.json();
+  window.onDeleteEntry = function(json) {
     busy(false);
     if (!json.success) {
       alert(json.error || 'Błąd usuwania wpisu');
@@ -272,14 +278,13 @@ $('#entry-list').addEventListener('click', async e => {
     }
     li.remove();
     loadAnnualSummary();
-  } catch (err) {
-    busy(false);
-    alert(err.message);
-  }
+    delete window.onDeleteEntry;
+  };
+  jsonp(params, 'onDeleteEntry');
 });
 
 /* ---- dodawanie wpisów ---- */
-async function addEntry (type) {
+function addEntry (type) {
   if (!curYear) return M.toast({ text: 'Wybierz rok', classes: 'red' });
 
   const title = prompt(`Opis ${type}:`);
@@ -290,11 +295,11 @@ async function addEntry (type) {
   const fileInput = document.createElement('input');
   fileInput.type = 'file';
   fileInput.accept = 'application/pdf';
-  fileInput.onchange = async () => {
+  fileInput.onchange = () => {
     const file = fileInput.files[0];
     if (!file) return;
     const reader = new FileReader();
-    reader.onload = async ev => {
+    reader.onload = ev => {
       const params = new URLSearchParams({
         action: 'addEntry',
         year: curYear,
@@ -304,11 +309,9 @@ async function addEntry (type) {
         desc: title,
         base64: ev.target.result,
         fileName: file.name
-      });
+      }).toString();
       busy(true);
-      try {
-        const res = await fetch(`${API_BASE}?${params}`, { method: 'GET' });
-        const json = await res.json();
+      window.onAddEntry = function(json) {
         busy(false);
         if (!json.success) {
           alert(json.error || 'Błąd dodawania wpisu');
@@ -316,10 +319,9 @@ async function addEntry (type) {
         }
         loadAnnualSummary();
         loadEntries();
-      } catch (err) {
-        busy(false);
-        alert(err.message);
-      }
+        delete window.onAddEntry;
+      };
+      jsonp(params, 'onAddEntry');
     };
     reader.readAsDataURL(file);
   };
