@@ -9,12 +9,13 @@ const PLACEHOLDER = 'https://picsum.photos/120';
 
 /* === API wrapper for POST requests ==================================== */
 async function api(action, payload = {}) {
-  const r = await fetch(API_BASE, {
+  const body = new URLSearchParams({ q: JSON.stringify({ action, ...payload }) });
+  const res = await fetch(API_BASE, {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ action, ...payload })
+    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+    body
   });
-  return r.json();
+  return res.json();
 }
 
 /* === tiny helpers ===================================================== */
@@ -105,14 +106,14 @@ $('#btn-save-profile').addEventListener('click', async e => {
     const res = await api('profileUpd', { email: me['Email'], data: upd });
     busy(false);
     if (!res.success) {
-      $('#profile-msg').textContent = res.error || 'Błąd aktualizacji profilu';
+      M.toast({ text: res.error || 'Błąd aktualizacji profilu', classes: 'red' });
       return;
     }
     $('#profile-msg').textContent = res.message || 'Profil zaktualizowany';
     Object.assign(me, upd);
   } catch (err) {
     busy(false);
-    $('#profile-msg').textContent = err.message || 'Błąd aktualizacji profilu';
+    M.toast({ text: err.message || 'Błąd aktualizacji profilu', classes: 'red' });
     console.error(err);
   }
 });
