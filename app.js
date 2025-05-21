@@ -9,11 +9,10 @@ const PLACEHOLDER = 'https://picsum.photos/120';
 
 /* === API wrapper for POST requests ==================================== */
 async function api(action, payload = {}) {
-  const body = new URLSearchParams({ q: JSON.stringify({ action, ...payload }) });
   const res = await fetch(API_BASE, {
     method: 'POST',
-    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-    body
+    headers: { 'Content-Type': 'text/plain' },
+    body: JSON.stringify({ action, ...payload })
   });
   return res.json();
 }
